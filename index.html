@@ -291,6 +291,14 @@ body {
 }
 .ccard-name { font-size: 13px; font-weight: 700; color: #1a1a2e; flex: 1; }
 
+.ccard-edit {
+  background: none; border: none; color: #bbb;
+  cursor: pointer; font-size: 12px; line-height: 1;
+  padding: 2px 4px; border-radius: 4px; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.ccard-edit:hover { color: #3949ab; background: rgba(57,73,171,0.1); }
+
 .ccard-del {
   background: none; border: none; color: #ddd;
   cursor: pointer; font-size: 13px; line-height: 1;
@@ -549,8 +557,9 @@ body {
 <!-- ======= CUSTOMER MODAL ======= -->
 <div class="overlay" id="cust-overlay">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>➕ לקוח חדש</h2>
+    <h2 id="cust-modal-title">➕ לקוח חדש</h2>
     <form id="cust-form" onsubmit="submitCustomer(event)">
+      <input type="hidden" id="f-edit-id" />
       <div class="fg">
         <label>שם לקוח *</label>
         <input id="f-name"    type="text"   required placeholder="שם מלא..." autocomplete="off" />
@@ -603,7 +612,7 @@ body {
         <input type="hidden" id="f-coord-time" />
       </div>
       <div class="modal-actions">
-        <button type="submit" class="btn btn-save">שמור לקוח</button>
+        <button type="submit" class="btn btn-save" id="cust-submit-btn">שמור לקוח</button>
         <button type="button" class="btn btn-cancel" onclick="closeCustomerModal()">ביטול</button>
       </div>
     </form>
@@ -980,6 +989,60 @@ document.querySelectorAll('.rbtn').forEach(btn => {
 });
 
 function openCustomerModal() {
+  document.getElementById('cust-modal-title').textContent = '➕ לקוח חדש';
+  document.getElementById('cust-submit-btn').textContent  = 'שמור לקוח';
+  document.getElementById('f-edit-id').value = '';
+  document.getElementById('cust-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-name').focus(), 80);
+}
+
+function openEditModal(id) {
+  const c = S.customers.find(x => x.id === id);
+  if (!c) return;
+
+  closeCustomerModal(); // reset first
+
+  document.getElementById('cust-modal-title').textContent = '✏️ עריכת לקוח';
+  document.getElementById('cust-submit-btn').textContent  = 'עדכן לקוח';
+  document.getElementById('f-edit-id').value   = id;
+  document.getElementById('f-name').value      = c.name    || '';
+  document.getElementById('f-order').value     = c.orderNum|| '';
+  document.getElementById('f-phone').value     = c.phone   || '';
+  document.getElementById('f-balance').value   = c.balance || '';
+  document.getElementById('f-city').value      = c.city    || '';
+
+  if (c.region) {
+    document.getElementById('f-region').value = c.region;
+    document.querySelectorAll('.rbtn').forEach(b => {
+      b.classList.toggle('active', b.dataset.region === c.region);
+    });
+  }
+
+  if (c.coordination) {
+    document.getElementById('f-coordination').value = c.coordination;
+    document.querySelectorAll('.cdbtn').forEach(b => {
+      b.classList.toggle('active', b.dataset.coord === c.coordination);
+    });
+    if (c.coordination === 'matched') {
+      document.getElementById('coord-time-section').style.display = 'block';
+      if (c.coordTime) {
+        document.getElementById('f-coord-time').value = c.coordTime;
+        const isSpecific = /^\d{2}:\d{2}$/.test(c.coordTime);
+        document.querySelectorAll('.tbtn').forEach(b => {
+          if (isSpecific) {
+            b.classList.toggle('active', b.dataset.time === 'specific');
+          } else {
+            b.classList.toggle('active', b.dataset.time === c.coordTime);
+          }
+        });
+        if (isSpecific) {
+          document.getElementById('f-specific-time').style.display = 'block';
+          document.getElementById('f-specific-time').value = c.coordTime;
+        }
+      }
+    }
+  }
+
   document.getElementById('cust-overlay').classList.add('open');
   setTimeout(() => document.getElementById('f-name').focus(), 80);
 }
@@ -987,6 +1050,7 @@ function openCustomerModal() {
 function closeCustomerModal() {
   document.getElementById('cust-overlay').classList.remove('open');
   document.getElementById('cust-form').reset();
+  document.getElementById('f-edit-id').value = '';
   document.getElementById('f-region').value = '';
   document.getElementById('f-coordination').value = '';
   document.getElementById('f-coord-time').value = '';
@@ -997,32 +1061,46 @@ function closeCustomerModal() {
 
 function submitCustomer(e) {
   e.preventDefault();
-  const name     = document.getElementById('f-name').value.trim();
-  const orderNum = document.getElementById('f-order').value.trim();
-  const phone    = document.getElementById('f-phone').value.trim();
-  const balance  = parseFloat(document.getElementById('f-balance').value) || 0;
-  if (!name || !orderNum) return;
-
+  const name        = document.getElementById('f-name').value.trim();
+  const orderNum    = document.getElementById('f-order').value.trim();
+  const phone       = document.getElementById('f-phone').value.trim();
+  const balance     = parseFloat(document.getElementById('f-balance').value) || 0;
   const region      = document.getElementById('f-region').value || '';
   const city        = document.getElementById('f-city').value.trim();
   const coordination= document.getElementById('f-coordination').value || '';
   const coordTime   = document.getElementById('f-coord-time').value || '';
-  const c = {
-    id: uid(), name, orderNum, phone, balance, city, region, coordination, coordTime,
-    driverId: S.selDriver,
-    weekKey: null, dayIdx: -1,
-    status: null
-  };
+  const editId      = document.getElementById('f-edit-id').value;
+  if (!name || !orderNum) return;
 
-  if (db) {
-    const {id, ...data} = c;
-    db.collection('customers').doc(id).set(data);
+  if (editId) {
+    // UPDATE existing customer
+    const updates = { name, orderNum, phone, balance, city, region, coordination, coordTime };
+    if (db) {
+      db.collection('customers').doc(editId).update(updates);
+    } else {
+      const c = S.customers.find(x => x.id === editId);
+      if (c) Object.assign(c, updates);
+      saveLocal();
+      render();
+    }
   } else {
-    S.customers.push(c);
-    saveLocal();
+    // CREATE new customer
+    const c = {
+      id: uid(), name, orderNum, phone, balance, city, region, coordination, coordTime,
+      driverId: S.selDriver,
+      weekKey: null, dayIdx: -1,
+      status: null
+    };
+    if (db) {
+      const {id, ...data} = c;
+      db.collection('customers').doc(id).set(data);
+    } else {
+      S.customers.push(c);
+      saveLocal();
+      render();
+    }
   }
   closeCustomerModal();
-  if (!db) render();
 }
 
 function delCustomer(id) {
@@ -1124,6 +1202,7 @@ function makeCard(c, routeNum) {
     ${rn}
     <div class="ccard-top">
       <div class="ccard-name">${esc(c.name)}</div>
+      <button class="ccard-edit" title="ערוך">✏️</button>
       <button class="ccard-del" title="מחק">✕</button>
     </div>
     <div class="ccard-row"><span class="ico">📋</span>${esc(c.orderNum)}</div>
@@ -1138,6 +1217,10 @@ function makeCard(c, routeNum) {
     </div>
   `;
 
+  div.querySelector('.ccard-edit').onclick = ev => {
+    ev.stopPropagation();
+    openEditModal(c.id);
+  };
   div.querySelector('.ccard-del').onclick = ev => {
     ev.stopPropagation();
     delCustomer(c.id);
