@@ -1086,8 +1086,8 @@ function renderDriverView() {
   const wk   = weekKey(S.weekStart);
   const mine = S.customers.filter(c => c.driverId === S.selDriver);
 
-  // Unassigned = dayIdx -1 or no week assigned
-  const unassigned = mine.filter(c => c.dayIdx === -1 || c.weekKey !== wk);
+  // Unassigned = never assigned to any week yet
+  const unassigned = mine.filter(c => !c.weekKey || c.dayIdx < 0);
 
   // Pool
   const pool  = document.getElementById('pool-zone');
