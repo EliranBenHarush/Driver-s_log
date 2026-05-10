@@ -411,6 +411,36 @@ body {
 .rbtn:hover { border-color: #3949ab; color: #3949ab; background: #eef0fb; }
 .rbtn.active { background: #3949ab; color: white; border-color: #3949ab; }
 
+.coord-btns {
+  display: flex; gap: 8px;
+}
+.cdbtn {
+  flex: 1; padding: 9px 0;
+  border: 1.5px solid #e0e4f0; border-radius: 10px;
+  background: #fafbff; color: #555;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.cdbtn[data-coord="matched"]:hover  { border-color: #43a047; color: #43a047; background: #f0fff1; }
+.cdbtn[data-coord="unmatched"]:hover { border-color: #e53935; color: #e53935; background: #fff5f5; }
+.cdbtn[data-coord="matched"].active  { background: #43a047; color: white; border-color: #43a047; }
+.cdbtn[data-coord="unmatched"].active { background: #e53935; color: white; border-color: #e53935; }
+
+.time-btns {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.tbtn {
+  flex: 1; min-width: 70px; padding: 7px 0;
+  border: 1.5px solid #e0e4f0; border-radius: 8px;
+  background: #fafbff; color: #555;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.tbtn:hover { border-color: #3949ab; color: #3949ab; background: #eef0fb; }
+.tbtn.active { background: #3949ab; color: white; border-color: #3949ab; }
+
 .fb-note {
   font-size: 11px; color: #999; margin-top: 10px;
   padding: 8px 12px; background: #fff8e1;
@@ -550,6 +580,27 @@ body {
           <button type="button" class="rbtn" data-region="מזרח">מזרח</button>
         </div>
         <input type="hidden" id="f-region" />
+      </div>
+      <div class="fg">
+        <label>תיאום</label>
+        <div class="coord-btns">
+          <button type="button" class="cdbtn" data-coord="matched">✓ תואם</button>
+          <button type="button" class="cdbtn" data-coord="unmatched">✗ לא תואם</button>
+        </div>
+        <div id="coord-time-section" style="display:none; margin-top:8px;">
+          <div class="time-btns">
+            <button type="button" class="tbtn" data-time="בוקר">בוקר</button>
+            <button type="button" class="tbtn" data-time="צהריים">צהריים</button>
+            <button type="button" class="tbtn" data-time="ערב">ערב</button>
+            <button type="button" class="tbtn" data-time="specific">שעה ספציפית</button>
+          </div>
+          <input type="time" id="f-specific-time"
+                 style="display:none; margin-top:8px; width:100%; padding:10px 14px;
+                        border:1.5px solid #e0e4f0; border-radius:10px;
+                        font-size:16px; font-family:inherit; background:#fafbff;" />
+        </div>
+        <input type="hidden" id="f-coordination" />
+        <input type="hidden" id="f-coord-time" />
       </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-save">שמור לקוח</button>
@@ -883,6 +934,43 @@ function shiftWeek(dir) {
 // ==========================================
 //  CUSTOMER MODAL
 // ==========================================
+document.querySelectorAll('.cdbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cdbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('f-coordination').value = btn.dataset.coord;
+    const timeSection = document.getElementById('coord-time-section');
+    if (btn.dataset.coord === 'matched') {
+      timeSection.style.display = 'block';
+    } else {
+      timeSection.style.display = 'none';
+      document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
+      document.getElementById('f-coord-time').value = '';
+      document.getElementById('f-specific-time').style.display = 'none';
+    }
+  });
+});
+
+document.querySelectorAll('.tbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const specificInput = document.getElementById('f-specific-time');
+    if (btn.dataset.time === 'specific') {
+      specificInput.style.display = 'block';
+      specificInput.focus();
+      document.getElementById('f-coord-time').value = '';
+    } else {
+      specificInput.style.display = 'none';
+      document.getElementById('f-coord-time').value = btn.dataset.time;
+    }
+  });
+});
+
+document.getElementById('f-specific-time').addEventListener('change', function() {
+  document.getElementById('f-coord-time').value = this.value;
+});
+
 document.querySelectorAll('.rbtn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
@@ -900,7 +988,11 @@ function closeCustomerModal() {
   document.getElementById('cust-overlay').classList.remove('open');
   document.getElementById('cust-form').reset();
   document.getElementById('f-region').value = '';
-  document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+  document.getElementById('f-coordination').value = '';
+  document.getElementById('f-coord-time').value = '';
+  document.getElementById('coord-time-section').style.display = 'none';
+  document.getElementById('f-specific-time').style.display = 'none';
+  document.querySelectorAll('.rbtn, .cdbtn, .tbtn').forEach(b => b.classList.remove('active'));
 }
 
 function submitCustomer(e) {
@@ -911,10 +1003,12 @@ function submitCustomer(e) {
   const balance  = parseFloat(document.getElementById('f-balance').value) || 0;
   if (!name || !orderNum) return;
 
-  const region = document.getElementById('f-region').value || '';
-  const city   = document.getElementById('f-city').value.trim();
+  const region      = document.getElementById('f-region').value || '';
+  const city        = document.getElementById('f-city').value.trim();
+  const coordination= document.getElementById('f-coordination').value || '';
+  const coordTime   = document.getElementById('f-coord-time').value || '';
   const c = {
-    id: uid(), name, orderNum, phone, balance, city, region,
+    id: uid(), name, orderNum, phone, balance, city, region, coordination, coordTime,
     driverId: S.selDriver,
     weekKey: null, dayIdx: -1,
     status: null
@@ -1017,6 +1111,11 @@ function makeCard(c, routeNum) {
     ? `<div class="ccard-row"><span class="ico">🏙️</span>${esc(c.city)}</div>` : '';
   const regionHtml = c.region
     ? `<div class="ccard-row"><span class="ico">📍</span>${esc(c.region)}</div>` : '';
+  const coordHtml = c.coordination === 'matched'
+    ? `<div class="ccard-row" style="color:#2e7d32;font-weight:700"><span class="ico">✓</span>תואם${c.coordTime ? ' · ' + esc(c.coordTime) : ''}</div>`
+    : c.coordination === 'unmatched'
+    ? `<div class="ccard-row" style="color:#c62828;font-weight:700"><span class="ico">✗</span>לא תואם</div>`
+    : '';
 
   const urgentActive    = c.status === 'urgent'    ? 'active' : '';
   const deliveredActive = c.status === 'delivered' ? 'active' : '';
@@ -1031,6 +1130,7 @@ function makeCard(c, routeNum) {
     ${phoneHtml}
     ${cityHtml}
     ${regionHtml}
+    ${coordHtml}
     ${balHtml}
     <div class="ccard-status">
       <button class="sbtn sbtn-urgent ${urgentActive}"    data-action="urgent">🚨 דחוף</button>
