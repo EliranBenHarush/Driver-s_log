@@ -706,35 +706,19 @@ function getFbConfig() {
 
 function initFirebase(config) {
   try {
-    // Stop existing listeners
     unsubs.forEach(u => u());
     unsubs = [];
 
-    // Init app (avoid duplicate)
     let app;
     try {
       app = firebase.app();
-      // If config changed, we can't re-init without page reload
     } catch(e) {
       app = firebase.initializeApp(config);
     }
 
     db = firebase.firestore();
     setFbStatus('connecting', 'מתחבר...');
-
-    // Test connection with a write
-    db.collection('_ping').doc('test').set({t: Date.now()})
-      .then(() => {
-        setFbStatus('connected', 'מחובר ל-Firebase ☁️');
-        fbReady = true;
-        startListeners();
-      })
-      .catch(err => {
-        console.error('Firestore error:', err);
-        setFbStatus('error', 'שגיאת חיבור');
-        fbReady = false;
-        db = null;
-      });
+    startListeners();
   } catch(err) {
     console.error('Firebase init error:', err);
     setFbStatus('error', 'שגיאה: בדוק את ה-Config');
@@ -742,13 +726,17 @@ function initFirebase(config) {
 }
 
 function startListeners() {
-  // Listen to drivers
   const u1 = db.collection('drivers').onSnapshot(snap => {
+    setFbStatus('connected', 'מחובר ל-Firebase ☁️');
+    fbReady = true;
     S.drivers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     render();
-  }, err => console.error('drivers snapshot error', err));
+  }, err => {
+    setFbStatus('error', 'שגיאת חיבור');
+    fbReady = false;
+    console.error('drivers snapshot error', err);
+  });
 
-  // Listen to customers
   const u2 = db.collection('customers').onSnapshot(snap => {
     S.customers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     render();
@@ -814,7 +802,7 @@ function clearFbConfig() {
 // ==========================================
 function persist(action) {
   // action: function that receives db (or null) and saves accordingly
-  if (db && fbReady) {
+  if (db) {
     action(db);
   } else {
     saveLocal();
@@ -831,7 +819,7 @@ function addDriver() {
   const driver = { id: uid(), name };
   inp.value = '';
 
-  if (db && fbReady) {
+  if (db) {
     db.collection('drivers').doc(driver.id).set({ name });
     // listeners will update S.drivers and re-render
   } else {
@@ -852,7 +840,7 @@ function selectDriver(id) {
 function delDriver(id) {
   if (!confirm('למחוק את הנהג ואת כל הלקוחות שלו?')) return;
 
-  if (db && fbReady) {
+  if (db) {
     // Delete driver doc
     db.collection('drivers').doc(id).delete();
     // Delete all customers for this driver
@@ -924,7 +912,7 @@ function submitCustomer(e) {
     status: null
   };
 
-  if (db && fbReady) {
+  if (db) {
     const {id, ...data} = c;
     db.collection('customers').doc(id).set(data);
   } else {
@@ -936,7 +924,7 @@ function submitCustomer(e) {
 }
 
 function delCustomer(id) {
-  if (db && fbReady) {
+  if (db) {
     db.collection('customers').doc(id).delete();
   } else {
     S.customers = S.customers.filter(c => c.id !== id);
@@ -954,7 +942,7 @@ function setStatus(id, newStatus) {
   if (!c) return;
   const val = c.status === newStatus ? null : newStatus;
 
-  if (db && fbReady) {
+  if (db) {
     db.collection('customers').doc(id).update({ status: val });
   } else {
     c.status = val;
@@ -985,7 +973,7 @@ function dzDrop(e, wk, dayIdx) {
     const newWk     = wk;
     const newDayIdx = dayIdx === null ? -1 : dayIdx;
 
-    if (db && fbReady) {
+    if (db) {
       db.collection('customers').doc(c.id).update({ weekKey: newWk, dayIdx: newDayIdx });
     } else {
       c.weekKey = newWk;
