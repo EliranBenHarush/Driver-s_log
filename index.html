@@ -394,6 +394,20 @@ body {
   background: #e8eaf6; padding: 2px 6px;
   border-radius: 4px; font-size: 11px;
 }
+.region-btns {
+  display: flex; gap: 8px;
+}
+.rbtn {
+  flex: 1; padding: 9px 0;
+  border: 1.5px solid #e0e4f0; border-radius: 10px;
+  background: #fafbff; color: #555;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.rbtn:hover { border-color: #3949ab; color: #3949ab; background: #eef0fb; }
+.rbtn.active { background: #3949ab; color: white; border-color: #3949ab; }
+
 .fb-note {
   font-size: 11px; color: #999; margin-top: 10px;
   padding: 8px 12px; background: #fff8e1;
@@ -519,6 +533,16 @@ body {
       <div class="fg">
         <label>יתרה לתשלום (₪)</label>
         <input id="f-balance" type="number" placeholder="0" step="0.01" min="0" autocomplete="off" />
+      </div>
+      <div class="fg">
+        <label>אזור</label>
+        <div class="region-btns">
+          <button type="button" class="rbtn" data-region="צפון">צפון</button>
+          <button type="button" class="rbtn" data-region="מרכז">מרכז</button>
+          <button type="button" class="rbtn" data-region="דרום">דרום</button>
+          <button type="button" class="rbtn" data-region="מזרח">מזרח</button>
+        </div>
+        <input type="hidden" id="f-region" />
       </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-save">שמור לקוח</button>
@@ -864,6 +888,14 @@ function shiftWeek(dir) {
 // ==========================================
 //  CUSTOMER MODAL
 // ==========================================
+document.querySelectorAll('.rbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('f-region').value = btn.dataset.region;
+  });
+});
+
 function openCustomerModal() {
   document.getElementById('cust-overlay').classList.add('open');
   setTimeout(() => document.getElementById('f-name').focus(), 80);
@@ -872,6 +904,8 @@ function openCustomerModal() {
 function closeCustomerModal() {
   document.getElementById('cust-overlay').classList.remove('open');
   document.getElementById('cust-form').reset();
+  document.getElementById('f-region').value = '';
+  document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
 }
 
 function submitCustomer(e) {
@@ -882,11 +916,12 @@ function submitCustomer(e) {
   const balance  = parseFloat(document.getElementById('f-balance').value) || 0;
   if (!name || !orderNum) return;
 
+  const region = document.getElementById('f-region').value || '';
   const c = {
-    id: uid(), name, orderNum, phone, balance,
+    id: uid(), name, orderNum, phone, balance, region,
     driverId: S.selDriver,
     weekKey: null, dayIdx: -1,
-    status: null   // null = לא סופק (orange)
+    status: null
   };
 
   if (db && fbReady) {
@@ -982,6 +1017,8 @@ function makeCard(c, routeNum) {
 
   const phoneHtml = c.phone
     ? `<div class="ccard-row"><span class="ico">📞</span>${esc(c.phone)}</div>` : '';
+  const regionHtml = c.region
+    ? `<div class="ccard-row"><span class="ico">📍</span>${esc(c.region)}</div>` : '';
 
   const urgentActive    = c.status === 'urgent'    ? 'active' : '';
   const deliveredActive = c.status === 'delivered' ? 'active' : '';
@@ -994,6 +1031,7 @@ function makeCard(c, routeNum) {
     </div>
     <div class="ccard-row"><span class="ico">📋</span>${esc(c.orderNum)}</div>
     ${phoneHtml}
+    ${regionHtml}
     ${balHtml}
     <div class="ccard-status">
       <button class="sbtn sbtn-urgent ${urgentActive}"    data-action="urgent">🚨 דחוף</button>
