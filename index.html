@@ -793,10 +793,33 @@ function initFirebase(config) {
 }
 
 function startListeners() {
+  let firstLoad = true;
+
+  function tryAutoNavigate() {
+    if (!firstLoad || !S.selDriver) return;
+    const mine = S.customers.filter(c => c.driverId === S.selDriver);
+    if (mine.length === 0) return;
+    firstLoad = false;
+    const wk = weekKey(S.weekStart);
+    const hasThisWeek = mine.some(c => c.weekKey === wk && c.dayIdx >= 0);
+    if (hasThisWeek) return;
+    const assignedWks = mine.filter(c => c.weekKey && c.dayIdx >= 0).map(c => c.weekKey);
+    if (assignedWks.length > 0) {
+      assignedWks.sort();
+      S.weekStart = sundayOf(new Date(assignedWks[assignedWks.length - 1]));
+      saveUiState();
+    }
+  }
+
   const u1 = db.collection('drivers').onSnapshot(snap => {
     setFbStatus('connected', 'מחובר ל-Firebase ☁️');
     fbReady = true;
     S.drivers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (!S.selDriver && S.drivers.length > 0) {
+      S.selDriver = S.drivers[0].id;
+      saveUiState();
+    }
+    tryAutoNavigate();
     render();
   }, err => {
     setFbStatus('error', 'שגיאת חיבור');
@@ -806,6 +829,7 @@ function startListeners() {
 
   const u2 = db.collection('customers').onSnapshot(snap => {
     S.customers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    tryAutoNavigate();
     render();
   }, err => console.error('customers snapshot error', err));
 
